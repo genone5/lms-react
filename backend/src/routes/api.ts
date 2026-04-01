@@ -1,0 +1,30 @@
+import { Router } from 'express';
+import authRoutes from './auth.routes.js';
+import patientRoutes from './patient.routes.js';
+import testRoutes from './test.routes.js';
+import orderRoutes from './order.routes.js';
+import sampleRoutes from './sample.routes.js';
+import resultRoutes from './result.routes.js';
+import billingRoutes from './billing.routes.js';
+import reportRoutes from './report.routes.js';
+import userRoutes from './user.routes.js';
+import roleRoutes from './role.routes.js';
+import branchRoutes from './branch.routes.js';
+import analyticsRoutes from './analytics.routes.js';
+import settingsRoutes from './settings.routes.js';
+
+export const apiRouter = Router();
+
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/patients', patientRoutes);
+apiRouter.use('/tests', testRoutes);
+apiRouter.use('/orders', orderRoutes);
+apiRouter.use('/samples', sampleRoutes);
+apiRouter.use('/results', resultRoutes);
+apiRouter.use('/billing', billingRoutes);
+apiRouter.use('/reports', reportRoutes);
+apiRouter.use('/users', userRoutes);
+apiRouter.use('/roles', roleRoutes);
+apiRouter.use('/branches', branchRoutes);
+apiRouter.use('/analytics', analyticsRoutes);
+apiRouter.use('/settings', settingsRoutes);
