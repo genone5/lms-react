@@ -1,16 +1,20 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const branchSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  name: { type: String, required: true },
-  address: { type: String, required: true },
-  city: { type: String, required: true },
-  phone: { type: String, default: '' },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Branch extends Model {
+  declare id: number;
+  declare name: string;
+  declare address: string;
+  declare city: string;
+  declare phone: string;
+  declare createdAt: Date;
+}
 
-export const Branch = model('Branch', branchSchema);
+Branch.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.TEXT, allowNull: false },
+  address: { type: DataTypes.TEXT, allowNull: false },
+  city: { type: DataTypes.TEXT, allowNull: false },
+  phone: { type: DataTypes.TEXT },
+  createdAt: { type: DataTypes.DATE },
+}, { sequelize, tableName: 'Branch', timestamps: false });

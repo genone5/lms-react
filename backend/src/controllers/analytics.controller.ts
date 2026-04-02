@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Op } from 'sequelize';
 import { Payment } from '../models/Payment.js';
 import { Invoice } from '../models/Invoice.js';
 import { TestOrder } from '../models/TestOrder.js';
@@ -9,8 +10,8 @@ import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getRevenue = async (_req: AuthRequest, res: Response): Promise<void> => {
   const [payments, unpaidInvoices] = await Promise.all([
-    Payment.find({}),
-    Invoice.find({ status: 'unpaid' }),
+    Payment.findAll(),
+    Invoice.findAll({ where: { status: 'unpaid' } }),
   ]);
 
   const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -23,7 +24,7 @@ export const getRevenue = async (_req: AuthRequest, res: Response): Promise<void
 
   const daily: Record<string, number> = {};
   payments.forEach(p => {
-    const date = p.paymentDate.split('T')[0];
+    const date = new Date(p.paymentDate).toISOString().split('T')[0];
     daily[date] = (daily[date] || 0) + p.amount;
   });
 
@@ -40,9 +41,9 @@ export const getRevenue = async (_req: AuthRequest, res: Response): Promise<void
 
 export const getTestVolume = async (_req: AuthRequest, res: Response): Promise<void> => {
   const [orderItems, tests, totalOrders] = await Promise.all([
-    OrderItem.find({}),
-    Test.find({}),
-    TestOrder.countDocuments({}),
+    OrderItem.findAll(),
+    Test.findAll(),
+    TestOrder.count(),
   ]);
 
   const testCounts = orderItems.reduce((acc, oi) => {
@@ -71,7 +72,7 @@ export const getTestVolume = async (_req: AuthRequest, res: Response): Promise<v
 };
 
 export const getPatientStats = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const patients = await Patient.find({});
+  const patients = await Patient.findAll();
 
   const byGender = patients.reduce((acc, p) => {
     acc[p.gender] = (acc[p.gender] || 0) + 1;
@@ -80,7 +81,7 @@ export const getPatientStats = async (_req: AuthRequest, res: Response): Promise
 
   const monthly: Record<string, number> = {};
   patients.forEach(p => {
-    const month = p.createdAt.slice(0, 7);
+    const month = new Date(p.createdAt).toISOString().slice(0, 7);
     monthly[month] = (monthly[month] || 0) + 1;
   });
 
@@ -95,14 +96,17 @@ export const getPatientStats = async (_req: AuthRequest, res: Response): Promise
 };
 
 export const getDailyActivity = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
 
   const [newPatients, todayOrders, pendingTests, completedTests, payments] = await Promise.all([
-    Patient.countDocuments({ createdAt: { $regex: `^${today}` } }),
-    TestOrder.countDocuments({ orderDate: { $regex: `^${today}` } }),
-    OrderItem.countDocuments({ status: 'pending' }),
-    OrderItem.countDocuments({ status: 'completed' }),
-    Payment.find({ paymentDate: { $regex: `^${today}` } }),
+    Patient.count({ where: { createdAt: { [Op.gte]: today, [Op.lt]: tomorrow } } }),
+    TestOrder.count({ where: { orderDate: { [Op.gte]: today, [Op.lt]: tomorrow } } }),
+    OrderItem.count({ where: { status: 'pending' } }),
+    OrderItem.count({ where: { status: 'completed' } }),
+    Payment.findAll({ where: { paymentDate: { [Op.gte]: today, [Op.lt]: tomorrow } } }),
   ]);
 
   const todayRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -110,7 +114,7 @@ export const getDailyActivity = async (_req: AuthRequest, res: Response): Promis
   res.json({
     success: true,
     data: {
-      date: today,
+      date: today.toISOString().split('T')[0],
       newPatients,
       totalOrders: todayOrders,
       pendingTests,

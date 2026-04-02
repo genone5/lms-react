@@ -1,24 +1,24 @@
 import { Response } from 'express';
 import PDFDocument from 'pdfkit';
+import { Op } from 'sequelize';
 import { Report } from '../models/Report.js';
 import { TestOrder } from '../models/TestOrder.js';
 import { Patient } from '../models/Patient.js';
 import { OrderItem } from '../models/OrderItem.js';
 import { Test } from '../models/Test.js';
 import { Result } from '../models/Result.js';
-import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getAll = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const reports = await Report.find({});
+  const reports = await Report.findAll();
   const orderIds = reports.map(r => r.orderId);
-  const orders = await TestOrder.find({ id: { $in: orderIds } });
+  const orders = await TestOrder.findAll({ where: { id: { [Op.in]: orderIds } } });
   const patientIds = [...new Set(orders.map(o => o.patientId))];
-  const patients = await Patient.find({ id: { $in: patientIds } });
+  const patients = await Patient.findAll({ where: { id: { [Op.in]: patientIds } } });
 
-  const data = reports.map((r: typeof reports[number]) => {
-    const order = orders.find((o: typeof orders[number]) => o.id === r.orderId);
-    const patient = patients.find((p: typeof patients[number]) => p.id === order?.patientId);
+  const data = reports.map(r => {
+    const order = orders.find(o => o.id === r.orderId);
+    const patient = patients.find(p => p.id === order?.patientId);
     return {
       ...r.toJSON(),
       patientName: patient ? `${patient.firstName} ${patient.lastName}` : 'Unknown',
@@ -30,24 +30,21 @@ export const getAll = async (_req: AuthRequest, res: Response): Promise<void> =>
 };
 
 export const getById = async (req: AuthRequest, res: Response): Promise<void> => {
-  const report = await Report.findOne({ id: parseInt(req.params.id) });
-  if (!report) {
-    res.status(404).json({ success: false, message: 'Report not found' });
-    return;
-  }
+  const report = await Report.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!report) { res.status(404).json({ success: false, message: 'Report not found' }); return; }
 
-  const order = await TestOrder.findOne({ id: report.orderId });
+  const order = await TestOrder.findOne({ where: { id: report.orderId } });
   const [patient, items, tests, results] = await Promise.all([
-    Patient.findOne({ id: order?.patientId }),
-    OrderItem.find({ orderId: report.orderId }),
-    Test.find({}),
-    Result.find({}),
+    Patient.findOne({ where: { id: order?.patientId } }),
+    OrderItem.findAll({ where: { orderId: report.orderId } }),
+    Test.findAll(),
+    Result.findAll(),
   ]);
 
-  const enrichedItems = items.map((oi: typeof items[number]) => ({
+  const enrichedItems = items.map(oi => ({
     ...oi.toJSON(),
-    testName: tests.find((t: typeof tests[number]) => t.id === oi.testId)?.name,
-    result: results.find((r: typeof results[number]) => r.orderItemId === oi.id),
+    testName: tests.find(t => t.id === oi.testId)?.name,
+    result: results.find(r => r.orderItemId === oi.id),
   }));
 
   res.json({ success: true, data: { ...report.toJSON(), order, patient, items: enrichedItems } });
@@ -55,42 +52,31 @@ export const getById = async (req: AuthRequest, res: Response): Promise<void> =>
 
 export const generate = async (req: AuthRequest, res: Response): Promise<void> => {
   const { orderId } = req.body;
-  if (!orderId) {
-    res.status(400).json({ success: false, message: 'orderId is required' });
-    return;
-  }
+  if (!orderId) { res.status(400).json({ success: false, message: 'orderId is required' }); return; }
 
-  const existing = await Report.findOne({ orderId: parseInt(orderId) });
-  if (existing) {
-    res.json({ success: true, data: existing, message: 'Report already exists' });
-    return;
-  }
+  const existing = await Report.findOne({ where: { orderId: parseInt(orderId) } });
+  if (existing) { res.json({ success: true, data: existing, message: 'Report already exists' }); return; }
 
-  const newReport = new Report({
-    id: await getNextId('report'),
+  const newReport = await Report.create({
     orderId: parseInt(orderId),
     reportUrl: `/reports/report_order_${orderId}.pdf`,
     generatedBy: req.user!.userId,
-    generatedAt: new Date().toISOString(),
+    generatedAt: new Date(),
     status: 'final',
   });
-  await newReport.save();
   res.status(201).json({ success: true, data: newReport, message: 'Report generated successfully' });
 };
 
 export const download = async (req: AuthRequest, res: Response): Promise<void> => {
-  const report = await Report.findOne({ id: parseInt(req.params.id) });
-  if (!report) {
-    res.status(404).json({ success: false, message: 'Report not found' });
-    return;
-  }
+  const report = await Report.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!report) { res.status(404).json({ success: false, message: 'Report not found' }); return; }
 
-  const order = await TestOrder.findOne({ id: report.orderId });
+  const order = await TestOrder.findOne({ where: { id: report.orderId } });
   const [patient, items, tests, results] = await Promise.all([
-    Patient.findOne({ id: order?.patientId }),
-    OrderItem.find({ orderId: report.orderId }),
-    Test.find({}),
-    Result.find({}),
+    Patient.findOne({ where: { id: order?.patientId } }),
+    OrderItem.findAll({ where: { orderId: report.orderId } }),
+    Test.findAll(),
+    Result.findAll(),
   ]);
 
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Unknown Patient';
@@ -150,10 +136,10 @@ export const download = async (req: AuthRequest, res: Response): Promise<void> =
   doc.moveDown(0.3);
 
   doc.font('Helvetica').fontSize(10);
-  items.forEach((item: typeof items[number]) => {
+  items.forEach(item => {
     const y = doc.y;
-    const testName = tests.find((t: typeof tests[number]) => t.id === item.testId)?.name ?? 'Unknown Test';
-    const result = results.find((r: typeof results[number]) => r.orderItemId === item.id);
+    const testName = tests.find(t => t.id === item.testId)?.name ?? 'Unknown Test';
+    const result = results.find(r => r.orderItemId === item.id);
     doc.text(testName, col.test, y, { width: 160 });
     doc.text(result?.resultValue ?? 'Pending', col.value, y);
     doc.text(result?.unit ?? '-', col.unit, y);

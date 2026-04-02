@@ -1,16 +1,20 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const sampleSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  orderItemId: { type: Number, required: true },
-  sampleType: { type: String, required: true },
-  collectedBy: { type: Number, required: true },
-  collectionTime: { type: String, default: () => new Date().toISOString() },
-  status: { type: String, enum: ['collected', 'in_lab', 'processing', 'completed'], default: 'collected' },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Sample extends Model {
+  declare id: number;
+  declare orderItemId: number;
+  declare sampleType: string;
+  declare collectedBy: number;
+  declare collectionTime: Date;
+  declare status: string;
+}
 
-export const Sample = model('Sample', sampleSchema);
+Sample.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  orderItemId: { type: DataTypes.INTEGER, allowNull: false },
+  sampleType: { type: DataTypes.TEXT, allowNull: false },
+  collectedBy: { type: DataTypes.INTEGER, field: 'collectedById' },
+  collectionTime: { type: DataTypes.DATE },
+  status: { type: DataTypes.TEXT, defaultValue: 'collected' },
+}, { sequelize, tableName: 'Sample', timestamps: false });

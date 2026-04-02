@@ -1,11 +1,11 @@
 import { Response } from 'express';
+import { Op } from 'sequelize';
 import { Result } from '../models/Result.js';
 import { OrderItem } from '../models/OrderItem.js';
 import { TestOrder } from '../models/TestOrder.js';
 import { Patient } from '../models/Patient.js';
 import { Test } from '../models/Test.js';
 import { User } from '../models/User.js';
-import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getAll = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -13,28 +13,31 @@ export const getAll = async (req: AuthRequest, res: Response): Promise<void> => 
 
   let itemIds: number[] | undefined;
   if (orderId) {
-    const items = await OrderItem.find({ orderId: parseInt(orderId) }, 'id');
+    const items = await OrderItem.findAll({ where: { orderId: parseInt(orderId) }, attributes: ['id'] });
     itemIds = items.map(i => i.id);
   }
 
-  const filter: Record<string, unknown> = {};
-  if (itemIds) filter.orderItemId = { $in: itemIds };
-  if (status) filter.resultStatus = status;
+  const where: Record<string, unknown> = {};
+  if (itemIds) where.orderItemId = { [Op.in]: itemIds };
+  if (status) where.resultStatus = status;
 
-  const results = await Result.find(filter);
+  const results = await Result.findAll({ where });
   const allItemIds = results.map(r => r.orderItemId);
-  const items = await OrderItem.find({ id: { $in: allItemIds } });
+  const items = await OrderItem.findAll({ where: { id: { [Op.in]: allItemIds } } });
   const orderIds = [...new Set(items.map(i => i.orderId))];
   const testIds = [...new Set(items.map(i => i.testId))];
-  const userIds = [...new Set([...results.map(r => r.enteredBy), ...results.filter(r => r.verifiedBy).map(r => r.verifiedBy as number)])];
+  const userIds = [...new Set([
+    ...results.map(r => r.enteredBy),
+    ...results.filter(r => r.verifiedBy).map(r => r.verifiedBy),
+  ])];
 
   const [orders, tests, users] = await Promise.all([
-    TestOrder.find({ id: { $in: orderIds } }),
-    Test.find({ id: { $in: testIds } }),
-    User.find({ id: { $in: userIds } }),
+    TestOrder.findAll({ where: { id: { [Op.in]: orderIds } } }),
+    Test.findAll({ where: { id: { [Op.in]: testIds } } }),
+    User.findAll({ where: { id: { [Op.in]: userIds } } }),
   ]);
   const patientIds = [...new Set(orders.map(o => o.patientId))];
-  const patients = await Patient.find({ id: { $in: patientIds } });
+  const patients = await Patient.findAll({ where: { id: { [Op.in]: patientIds } } });
 
   const data = results.map(r => {
     const item = items.find(i => i.id === r.orderItemId);
@@ -61,44 +64,31 @@ export const enter = async (req: AuthRequest, res: Response): Promise<void> => {
     return;
   }
 
-  const existing = await Result.findOne({ orderItemId: parseInt(orderItemId) });
-  if (existing) {
-    res.status(400).json({ success: false, message: 'Result already entered for this order item' });
-    return;
-  }
+  const existing = await Result.findOne({ where: { orderItemId: parseInt(orderItemId) } });
+  if (existing) { res.status(400).json({ success: false, message: 'Result already entered for this order item' }); return; }
 
-  const newResult = new Result({
-    id: await getNextId('result'),
+  const newResult = await Result.create({
     orderItemId: parseInt(orderItemId),
     resultValue, unit, normalRange, resultStatus,
     enteredBy: req.user!.userId,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   });
-  await newResult.save();
 
-  await OrderItem.findOneAndUpdate({ id: parseInt(orderItemId) }, { status: 'completed' });
+  await OrderItem.update({ status: 'completed' }, { where: { id: parseInt(orderItemId) } });
 
   res.status(201).json({ success: true, data: newResult, message: 'Result entered successfully' });
 };
 
 export const update = async (req: AuthRequest, res: Response): Promise<void> => {
-  const result = await Result.findOne({ id: parseInt(req.params.id) });
-  if (!result) {
-    res.status(404).json({ success: false, message: 'Result not found' });
-    return;
-  }
-  Object.assign(result, req.body);
-  await result.save();
+  const result = await Result.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!result) { res.status(404).json({ success: false, message: 'Result not found' }); return; }
+  await result.update(req.body);
   res.json({ success: true, data: result, message: 'Result updated successfully' });
 };
 
 export const verify = async (req: AuthRequest, res: Response): Promise<void> => {
-  const result = await Result.findOne({ id: parseInt(req.params.id) });
-  if (!result) {
-    res.status(404).json({ success: false, message: 'Result not found' });
-    return;
-  }
-  result.verifiedBy = req.user!.userId;
-  await result.save();
+  const result = await Result.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!result) { res.status(404).json({ success: false, message: 'Result not found' }); return; }
+  await result.update({ verifiedBy: req.user!.userId });
   res.json({ success: true, data: result, message: 'Result verified' });
 };

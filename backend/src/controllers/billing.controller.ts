@@ -1,29 +1,28 @@
 import { Response } from 'express';
+import { Op } from 'sequelize';
 import { Invoice } from '../models/Invoice.js';
 import { Payment } from '../models/Payment.js';
 import { TestOrder } from '../models/TestOrder.js';
 import { Patient } from '../models/Patient.js';
 import { OrderItem } from '../models/OrderItem.js';
 import { Test } from '../models/Test.js';
-import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getInvoices = async (req: AuthRequest, res: Response): Promise<void> => {
   const { status, page = '1', limit = '10' } = req.query as Record<string, string>;
 
-  const filter: Record<string, unknown> = {};
-  if (status) filter.status = status;
+  const where: Record<string, unknown> = {};
+  if (status) where.status = status;
 
-  const total = await Invoice.countDocuments(filter);
-  const invoices = await Invoice.find(filter)
-    .skip((parseInt(page) - 1) * parseInt(limit))
-    .limit(parseInt(limit))
-    .sort({ createdAt: -1 });
+  const { rows: invoices, count: total } = await Invoice.findAndCountAll({
+    where, limit: parseInt(limit), offset: (parseInt(page) - 1) * parseInt(limit),
+    order: [['createdAt', 'DESC']],
+  });
 
   const orderIds = invoices.map(inv => inv.orderId);
-  const orders = await TestOrder.find({ id: { $in: orderIds } });
+  const orders = await TestOrder.findAll({ where: { id: { [Op.in]: orderIds } } });
   const patientIds = [...new Set(orders.map(o => o.patientId))];
-  const patients = await Patient.find({ id: { $in: patientIds } });
+  const patients = await Patient.findAll({ where: { id: { [Op.in]: patientIds } } });
 
   const data = invoices.map(inv => {
     const order = orders.find(o => o.id === inv.orderId);
@@ -39,18 +38,15 @@ export const getInvoices = async (req: AuthRequest, res: Response): Promise<void
 };
 
 export const getInvoiceById = async (req: AuthRequest, res: Response): Promise<void> => {
-  const invoice = await Invoice.findOne({ id: parseInt(req.params.id) });
-  if (!invoice) {
-    res.status(404).json({ success: false, message: 'Invoice not found' });
-    return;
-  }
+  const invoice = await Invoice.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!invoice) { res.status(404).json({ success: false, message: 'Invoice not found' }); return; }
 
-  const order = await TestOrder.findOne({ id: invoice.orderId });
+  const order = await TestOrder.findOne({ where: { id: invoice.orderId } });
   const [patient, items, tests, invoicePayments] = await Promise.all([
-    Patient.findOne({ id: order?.patientId }),
-    OrderItem.find({ orderId: invoice.orderId }),
-    Test.find({}),
-    Payment.find({ invoiceId: invoice.id }),
+    Patient.findOne({ where: { id: order?.patientId } }),
+    OrderItem.findAll({ where: { orderId: invoice.orderId } }),
+    Test.findAll(),
+    Payment.findAll({ where: { invoiceId: invoice.id } }),
   ]);
 
   const enrichedItems = items.map(oi => ({ ...oi.toJSON(), testName: tests.find(t => t.id === oi.testId)?.name }));
@@ -59,55 +55,39 @@ export const getInvoiceById = async (req: AuthRequest, res: Response): Promise<v
 
 export const createInvoice = async (req: AuthRequest, res: Response): Promise<void> => {
   const { orderId, discount = 0, tax = 0 } = req.body;
-  if (!orderId) {
-    res.status(400).json({ success: false, message: 'orderId is required' });
-    return;
-  }
+  if (!orderId) { res.status(400).json({ success: false, message: 'orderId is required' }); return; }
 
-  const existing = await Invoice.findOne({ orderId: parseInt(orderId) });
-  if (existing) {
-    res.status(400).json({ success: false, message: 'Invoice already exists for this order' });
-    return;
-  }
+  const existing = await Invoice.findOne({ where: { orderId: parseInt(orderId) } });
+  if (existing) { res.status(400).json({ success: false, message: 'Invoice already exists for this order' }); return; }
 
-  const items = await OrderItem.find({ orderId: parseInt(orderId) });
+  const items = await OrderItem.findAll({ where: { orderId: parseInt(orderId) } });
   const totalAmount = items.reduce((sum, oi) => sum + oi.price, 0);
   const netAmount = totalAmount - parseFloat(discount) + parseFloat(tax);
 
-  const newInvoice = new Invoice({
-    id: await getNextId('invoice'),
+  const newInvoice = await Invoice.create({
     orderId: parseInt(orderId),
     totalAmount,
     discount: parseFloat(discount),
     tax: parseFloat(tax),
     netAmount,
     status: 'unpaid',
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   });
-  await newInvoice.save();
   res.status(201).json({ success: true, data: newInvoice, message: 'Invoice created successfully' });
 };
 
 export const updateInvoice = async (req: AuthRequest, res: Response): Promise<void> => {
-  const invoice = await Invoice.findOne({ id: parseInt(req.params.id) });
-  if (!invoice) {
-    res.status(404).json({ success: false, message: 'Invoice not found' });
-    return;
-  }
-  Object.assign(invoice, req.body);
-  await invoice.save();
+  const invoice = await Invoice.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!invoice) { res.status(404).json({ success: false, message: 'Invoice not found' }); return; }
+  await invoice.update(req.body);
   res.json({ success: true, data: invoice, message: 'Invoice updated' });
 };
 
 export const applyDiscount = async (req: AuthRequest, res: Response): Promise<void> => {
-  const invoice = await Invoice.findOne({ id: parseInt(req.params.id) });
-  if (!invoice) {
-    res.status(404).json({ success: false, message: 'Invoice not found' });
-    return;
-  }
-  invoice.discount = parseFloat(req.body.discount);
-  invoice.netAmount = invoice.totalAmount - invoice.discount + invoice.tax;
-  await invoice.save();
+  const invoice = await Invoice.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!invoice) { res.status(404).json({ success: false, message: 'Invoice not found' }); return; }
+  const discount = parseFloat(req.body.discount);
+  await invoice.update({ discount, netAmount: invoice.totalAmount - discount + invoice.tax });
   res.json({ success: true, data: invoice, message: 'Discount applied' });
 };
 
@@ -118,36 +98,30 @@ export const collectPayment = async (req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  const invoice = await Invoice.findOne({ id: parseInt(invoiceId) });
-  if (!invoice) {
-    res.status(404).json({ success: false, message: 'Invoice not found' });
-    return;
-  }
+  const invoice = await Invoice.findOne({ where: { id: parseInt(invoiceId) } });
+  if (!invoice) { res.status(404).json({ success: false, message: 'Invoice not found' }); return; }
 
-  const newPayment = new Payment({
-    id: await getNextId('payment'),
+  const newPayment = await Payment.create({
     invoiceId: parseInt(invoiceId),
     amount: parseFloat(amount),
     paymentMethod,
-    paymentDate: new Date().toISOString(),
+    paymentDate: new Date(),
     receivedBy: req.user!.userId,
   });
-  await newPayment.save();
 
-  invoice.status = 'paid';
-  await invoice.save();
+  await invoice.update({ status: 'paid' });
 
   res.status(201).json({ success: true, data: newPayment, message: 'Payment recorded successfully' });
 };
 
 export const getPayments = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const payments = await Payment.find({});
+  const payments = await Payment.findAll();
   const invoiceIds = payments.map(p => p.invoiceId);
-  const invoices = await Invoice.find({ id: { $in: invoiceIds } });
+  const invoices = await Invoice.findAll({ where: { id: { [Op.in]: invoiceIds } } });
   const orderIds = invoices.map(inv => inv.orderId);
-  const orders = await TestOrder.find({ id: { $in: orderIds } });
+  const orders = await TestOrder.findAll({ where: { id: { [Op.in]: orderIds } } });
   const patientIds = [...new Set(orders.map(o => o.patientId))];
-  const patients = await Patient.find({ id: { $in: patientIds } });
+  const patients = await Patient.findAll({ where: { id: { [Op.in]: patientIds } } });
 
   const data = payments.map(p => {
     const invoice = invoices.find(inv => inv.id === p.invoiceId);
@@ -164,18 +138,15 @@ export const getPayments = async (_req: AuthRequest, res: Response): Promise<voi
 };
 
 export const getReceipt = async (req: AuthRequest, res: Response): Promise<void> => {
-  const payment = await Payment.findOne({ id: parseInt(req.params.id) });
-  if (!payment) {
-    res.status(404).json({ success: false, message: 'Payment not found' });
-    return;
-  }
+  const payment = await Payment.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!payment) { res.status(404).json({ success: false, message: 'Payment not found' }); return; }
 
-  const invoice = await Invoice.findOne({ id: payment.invoiceId });
-  const order = await TestOrder.findOne({ id: invoice?.orderId });
+  const invoice = await Invoice.findOne({ where: { id: payment.invoiceId } });
+  const order = await TestOrder.findOne({ where: { id: invoice?.orderId } });
   const [patient, items, tests] = await Promise.all([
-    Patient.findOne({ id: order?.patientId }),
-    OrderItem.find({ orderId: order?.id }),
-    Test.find({}),
+    Patient.findOne({ where: { id: order?.patientId } }),
+    OrderItem.findAll({ where: { orderId: order?.id } }),
+    Test.findAll(),
   ]);
 
   const enrichedItems = items.map(oi => ({ ...oi.toJSON(), testName: tests.find(t => t.id === oi.testId)?.name }));

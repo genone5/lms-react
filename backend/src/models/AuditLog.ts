@@ -1,16 +1,20 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const auditLogSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  userId: { type: Number, required: true },
-  action: { type: String, required: true },
-  entityType: { type: String, required: true },
-  entityId: { type: Number },
-  timestamp: { type: String, default: () => new Date().toISOString() },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class AuditLog extends Model {
+  declare id: number;
+  declare userId: number;
+  declare action: string;
+  declare entityType: string;
+  declare entityId: number;
+  declare timestamp: Date;
+}
 
-export const AuditLog = model('AuditLog', auditLogSchema);
+AuditLog.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: DataTypes.INTEGER, allowNull: false },
+  action: { type: DataTypes.TEXT, allowNull: false },
+  entityType: { type: DataTypes.TEXT, allowNull: false },
+  entityId: { type: DataTypes.INTEGER },
+  timestamp: { type: DataTypes.DATE },
+}, { sequelize, tableName: 'AuditLog', timestamps: false });

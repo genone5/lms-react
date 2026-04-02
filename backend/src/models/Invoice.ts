@@ -1,18 +1,26 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const invoiceSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  orderId: { type: Number, required: true, unique: true },
-  totalAmount: { type: Number, required: true },
-  discount: { type: Number, default: 0 },
-  tax: { type: Number, default: 0 },
-  netAmount: { type: Number, required: true },
-  status: { type: String, enum: ['unpaid', 'paid', 'cancelled'], default: 'unpaid' },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Invoice extends Model {
+  declare id: number;
+  declare orderId: number;
+  declare totalAmount: number;
+  declare discount: number;
+  declare tax: number;
+  declare netAmount: number;
+  declare status: string;
+  declare branchId: number;
+  declare createdAt: Date;
+}
 
-export const Invoice = model('Invoice', invoiceSchema);
+Invoice.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  orderId: { type: DataTypes.INTEGER, allowNull: false, unique: true },
+  totalAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  discount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  tax: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  netAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  status: { type: DataTypes.TEXT, defaultValue: 'unpaid' },
+  branchId: { type: DataTypes.INTEGER },
+  createdAt: { type: DataTypes.DATE },
+}, { sequelize, tableName: 'Invoice', timestamps: false });

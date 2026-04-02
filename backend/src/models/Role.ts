@@ -1,13 +1,14 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const roleSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  name: { type: String, required: true },
-  description: { type: String, default: '' },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Role extends Model {
+  declare id: number;
+  declare name: string;
+  declare description: string;
+}
 
-export const Role = model('Role', roleSchema);
+Role.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.TEXT, allowNull: false },
+  description: { type: DataTypes.TEXT },
+}, { sequelize, tableName: 'Role', timestamps: false });

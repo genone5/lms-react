@@ -1,19 +1,26 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const resultSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  orderItemId: { type: Number, required: true },
-  resultValue: { type: String, required: true },
-  unit: { type: String, required: true },
-  normalRange: { type: String, required: true },
-  resultStatus: { type: String, enum: ['normal', 'abnormal', 'critical'], required: true },
-  enteredBy: { type: Number, required: true },
-  verifiedBy: { type: Number },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Result extends Model {
+  declare id: number;
+  declare orderItemId: number;
+  declare resultValue: string;
+  declare unit: string;
+  declare normalRange: string;
+  declare resultStatus: string;
+  declare enteredBy: number;
+  declare verifiedBy: number;
+  declare createdAt: Date;
+}
 
-export const Result = model('Result', resultSchema);
+Result.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  orderItemId: { type: DataTypes.INTEGER, allowNull: false },
+  resultValue: { type: DataTypes.TEXT, allowNull: false },
+  unit: { type: DataTypes.TEXT, allowNull: false },
+  normalRange: { type: DataTypes.TEXT, allowNull: false },
+  resultStatus: { type: DataTypes.TEXT, allowNull: false },
+  enteredBy: { type: DataTypes.INTEGER, field: 'enteredById' },
+  verifiedBy: { type: DataTypes.INTEGER, field: 'verifiedById' },
+  createdAt: { type: DataTypes.DATE },
+}, { sequelize, tableName: 'Result', timestamps: false });

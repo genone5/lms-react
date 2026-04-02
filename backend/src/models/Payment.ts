@@ -1,16 +1,20 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const paymentSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  invoiceId: { type: Number, required: true },
-  amount: { type: Number, required: true },
-  paymentMethod: { type: String, enum: ['cash', 'card', 'online', 'insurance'], required: true },
-  paymentDate: { type: String, default: () => new Date().toISOString() },
-  receivedBy: { type: Number, required: true },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Payment extends Model {
+  declare id: number;
+  declare invoiceId: number;
+  declare amount: number;
+  declare paymentMethod: string;
+  declare paymentDate: Date;
+  declare receivedBy: number;
+}
 
-export const Payment = model('Payment', paymentSchema);
+Payment.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  invoiceId: { type: DataTypes.INTEGER, allowNull: false },
+  amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  paymentMethod: { type: DataTypes.TEXT, allowNull: false },
+  paymentDate: { type: DataTypes.DATE },
+  receivedBy: { type: DataTypes.INTEGER, field: 'receivedById' },
+}, { sequelize, tableName: 'Payment', timestamps: false });

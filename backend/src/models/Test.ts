@@ -1,17 +1,22 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const testSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  name: { type: String, required: true },
-  category: { type: String, required: true },
-  price: { type: Number, required: true },
-  sampleType: { type: String, required: true },
-  normalRange: { type: String },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Test extends Model {
+  declare id: number;
+  declare name: string;
+  declare category: string;
+  declare price: number;
+  declare sampleType: string;
+  declare normalRange: string;
+  declare createdAt: Date;
+}
 
-export const Test = model('Test', testSchema);
+Test.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.TEXT, allowNull: false },
+  category: { type: DataTypes.TEXT, allowNull: false },
+  price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  sampleType: { type: DataTypes.TEXT, allowNull: false },
+  normalRange: { type: DataTypes.TEXT },
+  createdAt: { type: DataTypes.DATE },
+}, { sequelize, tableName: 'Test', timestamps: false });

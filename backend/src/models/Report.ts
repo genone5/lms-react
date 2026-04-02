@@ -1,16 +1,20 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const reportSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  orderId: { type: Number, required: true },
-  reportUrl: { type: String, default: '' },
-  generatedBy: { type: Number, required: true },
-  generatedAt: { type: String, default: () => new Date().toISOString() },
-  status: { type: String, enum: ['draft', 'final'], default: 'final' },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Report extends Model {
+  declare id: number;
+  declare orderId: number;
+  declare reportUrl: string;
+  declare generatedBy: number;
+  declare generatedAt: Date;
+  declare status: string;
+}
 
-export const Report = model('Report', reportSchema);
+Report.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  orderId: { type: DataTypes.INTEGER, allowNull: false },
+  reportUrl: { type: DataTypes.TEXT },
+  generatedBy: { type: DataTypes.INTEGER, field: 'generatedById' },
+  generatedAt: { type: DataTypes.DATE },
+  status: { type: DataTypes.TEXT, defaultValue: 'final' },
+}, { sequelize, tableName: 'Report', timestamps: false });

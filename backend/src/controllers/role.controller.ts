@@ -1,50 +1,35 @@
 import { Response } from 'express';
 import { Role } from '../models/Role.js';
-import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getAll = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const roles = await Role.find({});
-  res.json({ success: true, data: roles });
+  res.json({ success: true, data: await Role.findAll() });
 };
 
 export const getById = async (req: AuthRequest, res: Response): Promise<void> => {
-  const role = await Role.findOne({ id: parseInt(req.params.id) });
-  if (!role) {
-    res.status(404).json({ success: false, message: 'Role not found' });
-    return;
-  }
+  const role = await Role.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!role) { res.status(404).json({ success: false, message: 'Role not found' }); return; }
   res.json({ success: true, data: role });
 };
 
 export const create = async (req: AuthRequest, res: Response): Promise<void> => {
   const { name, description } = req.body;
-  if (!name) {
-    res.status(400).json({ success: false, message: 'Name is required' });
-    return;
-  }
-  const newRole = new Role({ id: await getNextId('role'), name, description });
-  await newRole.save();
+  if (!name) { res.status(400).json({ success: false, message: 'Name is required' }); return; }
+  const newRole = await Role.create({ name, description });
   res.status(201).json({ success: true, data: newRole, message: 'Role created successfully' });
 };
 
 export const update = async (req: AuthRequest, res: Response): Promise<void> => {
-  const role = await Role.findOne({ id: parseInt(req.params.id) });
-  if (!role) {
-    res.status(404).json({ success: false, message: 'Role not found' });
-    return;
-  }
-  Object.assign(role, req.body);
-  await role.save();
+  const role = await Role.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!role) { res.status(404).json({ success: false, message: 'Role not found' }); return; }
+  await role.update(req.body);
   res.json({ success: true, data: role, message: 'Role updated' });
 };
 
 export const remove = async (req: AuthRequest, res: Response): Promise<void> => {
-  const role = await Role.findOneAndDelete({ id: parseInt(req.params.id) });
-  if (!role) {
-    res.status(404).json({ success: false, message: 'Role not found' });
-    return;
-  }
+  const role = await Role.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!role) { res.status(404).json({ success: false, message: 'Role not found' }); return; }
+  await role.destroy();
   res.json({ success: true, message: 'Role deleted' });
 };
 

@@ -1,12 +1,12 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const settingsSchema = new Schema({
-  type: { type: String, required: true, unique: true }, // 'lab' | 'email'
-  data: { type: Schema.Types.Mixed, required: true },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Settings extends Model {
+  declare type: string;
+  declare data: Record<string, unknown>;
+}
 
-export const Settings = model('Settings', settingsSchema);
+Settings.init({
+  type: { type: DataTypes.TEXT, primaryKey: true },
+  data: { type: DataTypes.JSONB, allowNull: false },
+}, { sequelize, tableName: 'Settings', timestamps: false });

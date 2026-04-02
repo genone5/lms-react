@@ -1,30 +1,29 @@
 import { Response } from 'express';
+import { Op } from 'sequelize';
 import { TestOrder } from '../models/TestOrder.js';
 import { OrderItem } from '../models/OrderItem.js';
 import { Patient } from '../models/Patient.js';
 import { Test } from '../models/Test.js';
-import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getAll = async (req: AuthRequest, res: Response): Promise<void> => {
   const { status, patientId, page = '1', limit = '10' } = req.query as Record<string, string>;
 
-  const filter: Record<string, unknown> = {};
-  if (status) filter.status = status;
-  if (patientId) filter.patientId = parseInt(patientId);
+  const where: Record<string, unknown> = {};
+  if (status) where.status = status;
+  if (patientId) where.patientId = parseInt(patientId);
 
-  const total = await TestOrder.countDocuments(filter);
-  const orders = await TestOrder.find(filter)
-    .skip((parseInt(page) - 1) * parseInt(limit))
-    .limit(parseInt(limit))
-    .sort({ orderDate: -1 });
+  const { rows: orders, count: total } = await TestOrder.findAndCountAll({
+    where, limit: parseInt(limit), offset: (parseInt(page) - 1) * parseInt(limit),
+    order: [['orderDate', 'DESC']],
+  });
 
   const patientIds = [...new Set(orders.map(o => o.patientId))];
   const orderIds = orders.map(o => o.id);
   const [patients, allItems, allTests] = await Promise.all([
-    Patient.find({ id: { $in: patientIds } }),
-    OrderItem.find({ orderId: { $in: orderIds } }),
-    Test.find({}),
+    Patient.findAll({ where: { id: { [Op.in]: patientIds } } }),
+    OrderItem.findAll({ where: { orderId: { [Op.in]: orderIds } } }),
+    Test.findAll(),
   ]);
 
   const data = orders.map(o => ({
@@ -42,16 +41,13 @@ export const getAll = async (req: AuthRequest, res: Response): Promise<void> => 
 };
 
 export const getById = async (req: AuthRequest, res: Response): Promise<void> => {
-  const order = await TestOrder.findOne({ id: parseInt(req.params.id) });
-  if (!order) {
-    res.status(404).json({ success: false, message: 'Order not found' });
-    return;
-  }
+  const order = await TestOrder.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!order) { res.status(404).json({ success: false, message: 'Order not found' }); return; }
 
   const [patient, items, tests] = await Promise.all([
-    Patient.findOne({ id: order.patientId }),
-    OrderItem.find({ orderId: order.id }),
-    Test.find({}),
+    Patient.findOne({ where: { id: order.patientId } }),
+    OrderItem.findAll({ where: { orderId: order.id } }),
+    Test.findAll(),
   ]);
 
   const enrichedItems = items.map(i => ({
@@ -70,71 +66,47 @@ export const create = async (req: AuthRequest, res: Response): Promise<void> => 
     return;
   }
 
-  const patient = await Patient.findOne({ id: parseInt(patientId) });
-  if (!patient) {
-    res.status(404).json({ success: false, message: 'Patient not found' });
-    return;
-  }
+  const patient = await Patient.findOne({ where: { id: parseInt(patientId) } });
+  if (!patient) { res.status(404).json({ success: false, message: 'Patient not found' }); return; }
 
-  const newOrder = new TestOrder({
-    id: await getNextId('testorder'),
+  const newOrder = await TestOrder.create({
     patientId: parseInt(patientId),
     doctorName,
     branchId: parseInt(branchId),
     status: 'pending',
-    orderDate: new Date().toISOString(),
+    orderDate: new Date(),
     createdBy: req.user!.userId,
   });
-  await newOrder.save();
 
-  const tests = await Test.find({ id: { $in: testIds } });
-  const itemDocs = await Promise.all(
+  const tests = await Test.findAll({ where: { id: { [Op.in]: testIds } } });
+  const items = await Promise.all(
     (testIds as number[]).map(async (testId: number) => {
       const test = tests.find(t => t.id === testId);
-      const item = new OrderItem({
-        id: await getNextId('orderitem'),
-        orderId: newOrder.id,
-        testId,
-        price: test?.price || 0,
-        status: 'pending',
-      });
-      await item.save();
-      return item;
+      return OrderItem.create({ orderId: newOrder.id, testId, price: test?.price || 0, status: 'pending' });
     })
   );
 
-  res.status(201).json({
-    success: true,
-    data: { ...newOrder.toJSON(), items: itemDocs },
-    message: 'Order created successfully',
-  });
+  res.status(201).json({ success: true, data: { ...newOrder.toJSON(), items }, message: 'Order created successfully' });
 };
 
 export const updateStatus = async (req: AuthRequest, res: Response): Promise<void> => {
-  const order = await TestOrder.findOne({ id: parseInt(req.params.id) });
-  if (!order) {
-    res.status(404).json({ success: false, message: 'Order not found' });
-    return;
-  }
-  order.status = req.body.status;
-  await order.save();
+  const order = await TestOrder.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!order) { res.status(404).json({ success: false, message: 'Order not found' }); return; }
+  await order.update({ status: req.body.status });
   res.json({ success: true, data: order, message: 'Order status updated' });
 };
 
 export const cancel = async (req: AuthRequest, res: Response): Promise<void> => {
-  const order = await TestOrder.findOne({ id: parseInt(req.params.id) });
-  if (!order) {
-    res.status(404).json({ success: false, message: 'Order not found' });
-    return;
-  }
-  order.status = 'cancelled';
-  await order.save();
+  const order = await TestOrder.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!order) { res.status(404).json({ success: false, message: 'Order not found' }); return; }
+  await order.update({ status: 'cancelled' });
   res.json({ success: true, message: 'Order cancelled' });
 };
 
 export const getItems = async (req: AuthRequest, res: Response): Promise<void> => {
-  const items = await OrderItem.find({ orderId: parseInt(req.params.id) });
-  const tests = await Test.find({ id: { $in: items.map(i => i.testId) } });
+  const items = await OrderItem.findAll({ where: { orderId: parseInt(req.params.id) } });
+  const testIds = items.map(i => i.testId);
+  const tests = await Test.findAll({ where: { id: { [Op.in]: testIds } } });
   const data = items.map(i => ({ ...i.toJSON(), testName: tests.find(t => t.id === i.testId)?.name }));
   res.json({ success: true, data });
 };

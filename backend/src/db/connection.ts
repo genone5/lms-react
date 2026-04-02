@@ -1,13 +1,16 @@
-import mongoose from 'mongoose';
+import { Sequelize } from 'sequelize';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/lms';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://macbook@localhost:5432/lms';
+
+export const sequelize = new Sequelize(DATABASE_URL, {
+  dialect: 'postgres',
+  logging: false,
+});
 
 export async function connectDB(): Promise<void> {
-  try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('MongoDB connected:', MONGODB_URI);
-  } catch (err) {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-  }
+  await sequelize.authenticate();
+  console.log('PostgreSQL connected:', DATABASE_URL);
+  // Add new columns without dropping existing data
+  await sequelize.sync({ alter: true });
+  console.log('Database schema synced');
 }

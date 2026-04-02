@@ -2,20 +2,16 @@ import { Response } from 'express';
 import { Branch } from '../models/Branch.js';
 import { User } from '../models/User.js';
 import { Role } from '../models/Role.js';
-import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getAll = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const branches = await Branch.find({});
+  const branches = await Branch.findAll();
   res.json({ success: true, data: branches });
 };
 
 export const getById = async (req: AuthRequest, res: Response): Promise<void> => {
-  const branch = await Branch.findOne({ id: parseInt(req.params.id) });
-  if (!branch) {
-    res.status(404).json({ success: false, message: 'Branch not found' });
-    return;
-  }
+  const branch = await Branch.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!branch) { res.status(404).json({ success: false, message: 'Branch not found' }); return; }
   res.json({ success: true, data: branch });
 };
 
@@ -25,35 +21,27 @@ export const create = async (req: AuthRequest, res: Response): Promise<void> => 
     res.status(400).json({ success: false, message: 'name, address and city are required' });
     return;
   }
-  const newBranch = new Branch({ id: await getNextId('branch'), name, address, city, phone, createdAt: new Date().toISOString() });
-  await newBranch.save();
+  const newBranch = await Branch.create({ name, address, city, phone, createdAt: new Date() });
   res.status(201).json({ success: true, data: newBranch, message: 'Branch created successfully' });
 };
 
 export const update = async (req: AuthRequest, res: Response): Promise<void> => {
-  const branch = await Branch.findOne({ id: parseInt(req.params.id) });
-  if (!branch) {
-    res.status(404).json({ success: false, message: 'Branch not found' });
-    return;
-  }
-  Object.assign(branch, req.body);
-  await branch.save();
+  const branch = await Branch.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!branch) { res.status(404).json({ success: false, message: 'Branch not found' }); return; }
+  await branch.update(req.body);
   res.json({ success: true, data: branch, message: 'Branch updated' });
 };
 
 export const remove = async (req: AuthRequest, res: Response): Promise<void> => {
-  const branch = await Branch.findOneAndDelete({ id: parseInt(req.params.id) });
-  if (!branch) {
-    res.status(404).json({ success: false, message: 'Branch not found' });
-    return;
-  }
+  const branch = await Branch.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!branch) { res.status(404).json({ success: false, message: 'Branch not found' }); return; }
+  await branch.destroy();
   res.json({ success: true, message: 'Branch deleted' });
 };
 
 export const getStaff = async (req: AuthRequest, res: Response): Promise<void> => {
-  const branchId = parseInt(req.params.id);
-  const users = await User.find({ branchId });
-  const roles = await Role.find({});
+  const users = await User.findAll({ where: { branchId: parseInt(req.params.id) } });
+  const roles = await Role.findAll();
   const staff = users.map(u => ({
     id: u.id, name: u.name, email: u.email,
     roleName: roles.find(r => r.id === u.roleId)?.name,

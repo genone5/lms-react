@@ -1,15 +1,18 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const notificationSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  userId: { type: Number, required: true },
-  message: { type: String, required: true },
-  status: { type: String, enum: ['unread', 'read'], default: 'unread' },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class Notification extends Model {
+  declare id: number;
+  declare userId: number;
+  declare message: string;
+  declare status: string;
+  declare createdAt: Date;
+}
 
-export const Notification = model('Notification', notificationSchema);
+Notification.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: DataTypes.INTEGER, allowNull: false },
+  message: { type: DataTypes.TEXT, allowNull: false },
+  status: { type: DataTypes.TEXT, defaultValue: 'unread' },
+  createdAt: { type: DataTypes.DATE },
+}, { sequelize, tableName: 'Notification', timestamps: false });

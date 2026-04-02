@@ -1,24 +1,28 @@
 import { Response } from 'express';
+import { Op } from 'sequelize';
 import { Sample } from '../models/Sample.js';
 import { OrderItem } from '../models/OrderItem.js';
 import { TestOrder } from '../models/TestOrder.js';
 import { Patient } from '../models/Patient.js';
 import { Test } from '../models/Test.js';
-import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 export const getPending = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const collectedItemIds = (await Sample.find({}, 'orderItemId')).map(s => s.orderItemId);
-  const pendingItems = await OrderItem.find({ status: 'pending', id: { $nin: collectedItemIds } });
+  const collectedSamples = await Sample.findAll({ attributes: ['orderItemId'] });
+  const collectedItemIds = collectedSamples.map(s => s.orderItemId);
 
+  const where: Record<string, unknown> = { status: 'pending' };
+  if (collectedItemIds.length) where.id = { [Op.notIn]: collectedItemIds };
+
+  const pendingItems = await OrderItem.findAll({ where });
   const orderIds = [...new Set(pendingItems.map(oi => oi.orderId))];
   const testIds = [...new Set(pendingItems.map(oi => oi.testId))];
   const [orders, tests] = await Promise.all([
-    TestOrder.find({ id: { $in: orderIds } }),
-    Test.find({ id: { $in: testIds } }),
+    TestOrder.findAll({ where: { id: { [Op.in]: orderIds } } }),
+    Test.findAll({ where: { id: { [Op.in]: testIds } } }),
   ]);
   const patientIds = [...new Set(orders.map(o => o.patientId))];
-  const patients = await Patient.find({ id: { $in: patientIds } });
+  const patients = await Patient.findAll({ where: { id: { [Op.in]: patientIds } } });
 
   const data = pendingItems.map(oi => {
     const order = orders.find(o => o.id === oi.orderId);
@@ -44,50 +48,41 @@ export const collect = async (req: AuthRequest, res: Response): Promise<void> =>
     return;
   }
 
-  const existing = await Sample.findOne({ orderItemId: parseInt(orderItemId) });
-  if (existing) {
-    res.status(400).json({ success: false, message: 'Sample already collected for this order item' });
-    return;
-  }
+  const existing = await Sample.findOne({ where: { orderItemId: parseInt(orderItemId) } });
+  if (existing) { res.status(400).json({ success: false, message: 'Sample already collected for this order item' }); return; }
 
-  const newSample = new Sample({
-    id: await getNextId('sample'),
+  const newSample = await Sample.create({
     orderItemId: parseInt(orderItemId),
     sampleType,
     collectedBy: req.user!.userId,
-    collectionTime: new Date().toISOString(),
+    collectionTime: new Date(),
     status: 'collected',
   });
-  await newSample.save();
 
-  await OrderItem.findOneAndUpdate({ id: parseInt(orderItemId) }, { status: 'collected' });
+  await OrderItem.update({ status: 'collected' }, { where: { id: parseInt(orderItemId) } });
 
   res.status(201).json({ success: true, data: newSample, message: 'Sample collected successfully' });
 };
 
 export const updateStatus = async (req: AuthRequest, res: Response): Promise<void> => {
-  const sample = await Sample.findOne({ id: parseInt(req.params.id) });
-  if (!sample) {
-    res.status(404).json({ success: false, message: 'Sample not found' });
-    return;
-  }
-  sample.status = req.body.status;
-  await sample.save();
+  const sample = await Sample.findOne({ where: { id: parseInt(req.params.id) } });
+  if (!sample) { res.status(404).json({ success: false, message: 'Sample not found' }); return; }
+  await sample.update({ status: req.body.status });
   res.json({ success: true, data: sample, message: 'Sample status updated' });
 };
 
 export const getHistory = async (_req: AuthRequest, res: Response): Promise<void> => {
-  const samples = await Sample.find({});
+  const samples = await Sample.findAll();
   const itemIds = samples.map(s => s.orderItemId);
-  const items = await OrderItem.find({ id: { $in: itemIds } });
+  const items = await OrderItem.findAll({ where: { id: { [Op.in]: itemIds } } });
   const orderIds = [...new Set(items.map(i => i.orderId))];
   const testIds = [...new Set(items.map(i => i.testId))];
   const [orders, tests] = await Promise.all([
-    TestOrder.find({ id: { $in: orderIds } }),
-    Test.find({ id: { $in: testIds } }),
+    TestOrder.findAll({ where: { id: { [Op.in]: orderIds } } }),
+    Test.findAll({ where: { id: { [Op.in]: testIds } } }),
   ]);
   const patientIds = [...new Set(orders.map(o => o.patientId))];
-  const patients = await Patient.find({ id: { $in: patientIds } });
+  const patients = await Patient.findAll({ where: { id: { [Op.in]: patientIds } } });
 
   const data = samples.map(s => {
     const item = items.find(i => i.id === s.orderItemId);

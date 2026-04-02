@@ -1,15 +1,18 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const orderItemSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  orderId: { type: Number, required: true },
-  testId: { type: Number, required: true },
-  price: { type: Number, required: true },
-  status: { type: String, enum: ['pending', 'collected', 'processing', 'completed'], default: 'pending' },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class OrderItem extends Model {
+  declare id: number;
+  declare orderId: number;
+  declare testId: number;
+  declare price: number;
+  declare status: string;
+}
 
-export const OrderItem = model('OrderItem', orderItemSchema);
+OrderItem.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  orderId: { type: DataTypes.INTEGER, allowNull: false },
+  testId: { type: DataTypes.INTEGER, allowNull: false },
+  price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  status: { type: DataTypes.TEXT, defaultValue: 'pending' },
+}, { sequelize, tableName: 'OrderItem', timestamps: false });

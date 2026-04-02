@@ -1,20 +1,28 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const userSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  passwordHash: { type: String, required: true },
-  roleId: { type: Number, required: true },
-  roleName: { type: String },
-  branchId: { type: Number },
-  phone: { type: String },
-  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class User extends Model {
+  declare id: number;
+  declare name: string;
+  declare email: string;
+  declare passwordHash: string;
+  declare roleId: number;
+  declare roleName: string;
+  declare branchId: number;
+  declare phone: string;
+  declare status: string;
+  declare createdAt: Date;
+}
 
-export const User = model('User', userSchema);
+User.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.TEXT, allowNull: false },
+  email: { type: DataTypes.TEXT, allowNull: false, unique: true },
+  passwordHash: { type: DataTypes.TEXT, allowNull: false },
+  roleId: { type: DataTypes.INTEGER },
+  roleName: { type: DataTypes.TEXT },
+  branchId: { type: DataTypes.INTEGER },
+  phone: { type: DataTypes.TEXT },
+  status: { type: DataTypes.TEXT, defaultValue: 'active' },
+  createdAt: { type: DataTypes.DATE },
+}, { sequelize, tableName: 'User', timestamps: false });

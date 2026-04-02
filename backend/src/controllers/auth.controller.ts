@@ -14,19 +14,18 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ where: { email } });
   if (!user || user.status !== 'active') {
     res.status(401).json({ success: false, message: 'Invalid credentials' });
     return;
   }
 
-  const validPassword = bcrypt.compareSync(password, user.passwordHash);
-  if (!validPassword) {
+  if (!bcrypt.compareSync(password, user.passwordHash)) {
     res.status(401).json({ success: false, message: 'Invalid credentials' });
     return;
   }
 
-  const role = await Role.findOne({ id: user.roleId });
+  const role = await Role.findOne({ where: { id: user.roleId } });
   const payload = { userId: user.id, email: user.email, roleId: user.roleId, roleName: role?.name || '' };
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });
 
@@ -34,59 +33,33 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     success: true,
     data: {
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: role?.name || '',
-        roleId: user.roleId,
-        branchId: user.branchId,
-        phone: user.phone,
-      },
+      user: { id: user.id, name: user.name, email: user.email, role: role?.name || '', roleId: user.roleId, branchId: user.branchId, phone: user.phone },
     },
     message: 'Login successful',
   });
 };
 
 export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
-  const user = await User.findOne({ id: req.user?.userId });
-  if (!user) {
-    res.status(404).json({ success: false, message: 'User not found' });
-    return;
-  }
+  const user = await User.findOne({ where: { id: req.user?.userId } });
+  if (!user) { res.status(404).json({ success: false, message: 'User not found' }); return; }
 
-  const role = await Role.findOne({ id: user.roleId });
+  const role = await Role.findOne({ where: { id: user.roleId } });
   res.json({
     success: true,
-    data: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: role?.name || '',
-      roleId: user.roleId,
-      branchId: user.branchId,
-      phone: user.phone,
-      status: user.status,
-    },
+    data: { id: user.id, name: user.name, email: user.email, role: role?.name || '', roleId: user.roleId, branchId: user.branchId, phone: user.phone, status: user.status },
   });
 };
 
 export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
   const { oldPassword, newPassword } = req.body;
-  const user = await User.findOne({ id: req.user?.userId });
+  const user = await User.findOne({ where: { id: req.user?.userId } });
+  if (!user) { res.status(404).json({ success: false, message: 'User not found' }); return; }
 
-  if (!user) {
-    res.status(404).json({ success: false, message: 'User not found' });
-    return;
-  }
-
-  const valid = bcrypt.compareSync(oldPassword, user.passwordHash);
-  if (!valid) {
+  if (!bcrypt.compareSync(oldPassword, user.passwordHash)) {
     res.status(400).json({ success: false, message: 'Current password is incorrect' });
     return;
   }
 
-  user.passwordHash = bcrypt.hashSync(newPassword, 10);
-  await user.save();
+  await user.update({ passwordHash: bcrypt.hashSync(newPassword, 10) });
   res.json({ success: true, message: 'Password changed successfully' });
 };

@@ -1,17 +1,22 @@
-import { Schema, model } from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../db/connection.js';
 
-const testOrderSchema = new Schema({
-  id: { type: Number, required: true, unique: true },
-  patientId: { type: Number, required: true },
-  doctorName: { type: String, required: true },
-  branchId: { type: Number, required: true },
-  status: { type: String, enum: ['pending', 'sample_collected', 'processing', 'completed', 'cancelled'], default: 'pending' },
-  orderDate: { type: String, default: () => new Date().toISOString() },
-  createdBy: { type: Number, required: true },
-}, {
-  toJSON: {
-    transform(_doc, ret) { delete ret._id; delete ret.__v; return ret; },
-  },
-});
+export class TestOrder extends Model {
+  declare id: number;
+  declare patientId: number;
+  declare doctorName: string;
+  declare branchId: number;
+  declare status: string;
+  declare orderDate: Date;
+  declare createdBy: number;
+}
 
-export const TestOrder = model('TestOrder', testOrderSchema);
+TestOrder.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  patientId: { type: DataTypes.INTEGER, allowNull: false },
+  doctorName: { type: DataTypes.TEXT, allowNull: false },
+  branchId: { type: DataTypes.INTEGER, allowNull: false },
+  status: { type: DataTypes.TEXT, defaultValue: 'pending' },
+  orderDate: { type: DataTypes.DATE },
+  createdBy: { type: DataTypes.INTEGER, field: 'createdById' },
+}, { sequelize, tableName: 'TestOrder', timestamps: false });
