@@ -1,86 +1,104 @@
 import { Response } from 'express';
-import { results, orderItems, testOrders, patients, tests, users } from '../data/mockData.js';
+import { Result } from '../models/Result.js';
+import { OrderItem } from '../models/OrderItem.js';
+import { TestOrder } from '../models/TestOrder.js';
+import { Patient } from '../models/Patient.js';
+import { Test } from '../models/Test.js';
+import { User } from '../models/User.js';
+import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
-import type { Result } from '../types/index.js';
 
-let nextId = results.length + 1;
-
-export const getAll = (req: AuthRequest, res: Response): void => {
+export const getAll = async (req: AuthRequest, res: Response): Promise<void> => {
   const { orderId, status } = req.query as Record<string, string>;
-  let data = results.map(r => {
-    const item = orderItems.find(oi => oi.id === r.orderItemId);
-    const order = testOrders.find(o => o.id === item?.orderId);
+
+  let itemIds: number[] | undefined;
+  if (orderId) {
+    const items = await OrderItem.find({ orderId: parseInt(orderId) }, 'id');
+    itemIds = items.map(i => i.id);
+  }
+
+  const filter: Record<string, unknown> = {};
+  if (itemIds) filter.orderItemId = { $in: itemIds };
+  if (status) filter.resultStatus = status;
+
+  const results = await Result.find(filter);
+  const allItemIds = results.map(r => r.orderItemId);
+  const items = await OrderItem.find({ id: { $in: allItemIds } });
+  const orderIds = [...new Set(items.map(i => i.orderId))];
+  const testIds = [...new Set(items.map(i => i.testId))];
+  const userIds = [...new Set([...results.map(r => r.enteredBy), ...results.filter(r => r.verifiedBy).map(r => r.verifiedBy as number)])];
+
+  const [orders, tests, users] = await Promise.all([
+    TestOrder.find({ id: { $in: orderIds } }),
+    Test.find({ id: { $in: testIds } }),
+    User.find({ id: { $in: userIds } }),
+  ]);
+  const patientIds = [...new Set(orders.map(o => o.patientId))];
+  const patients = await Patient.find({ id: { $in: patientIds } });
+
+  const data = results.map(r => {
+    const item = items.find(i => i.id === r.orderItemId);
+    const order = orders.find(o => o.id === item?.orderId);
     const patient = patients.find(p => p.id === order?.patientId);
     const test = tests.find(t => t.id === item?.testId);
-    const enteredByUser = users.find(u => u.id === r.enteredBy);
-    const verifiedByUser = r.verifiedBy ? users.find(u => u.id === r.verifiedBy) : null;
     return {
-      ...r,
+      ...r.toJSON(),
       testName: test?.name,
       patientName: patient ? `${patient.firstName} ${patient.lastName}` : 'Unknown',
       orderId: order?.id,
-      enteredByName: enteredByUser?.name,
-      verifiedByName: verifiedByUser?.name,
+      enteredByName: users.find(u => u.id === r.enteredBy)?.name,
+      verifiedByName: r.verifiedBy ? users.find(u => u.id === r.verifiedBy)?.name : undefined,
     };
   });
-
-  if (orderId) {
-    const orderItemIds = orderItems.filter(oi => oi.orderId === parseInt(orderId)).map(oi => oi.id);
-    data = data.filter(r => orderItemIds.includes(r.orderItemId));
-  }
-  if (status) data = data.filter(r => r.resultStatus === status);
 
   res.json({ success: true, data });
 };
 
-export const enter = (req: AuthRequest, res: Response): void => {
+export const enter = async (req: AuthRequest, res: Response): Promise<void> => {
   const { orderItemId, resultValue, unit, normalRange, resultStatus } = req.body;
   if (!orderItemId || !resultValue || !unit || !normalRange || !resultStatus) {
     res.status(400).json({ success: false, message: 'All fields are required' });
     return;
   }
 
-  const existing = results.find(r => r.orderItemId === parseInt(orderItemId));
+  const existing = await Result.findOne({ orderItemId: parseInt(orderItemId) });
   if (existing) {
     res.status(400).json({ success: false, message: 'Result already entered for this order item' });
     return;
   }
 
-  const newResult: Result = {
-    id: nextId++,
+  const newResult = new Result({
+    id: await getNextId('result'),
     orderItemId: parseInt(orderItemId),
-    resultValue,
-    unit,
-    normalRange,
-    resultStatus,
+    resultValue, unit, normalRange, resultStatus,
     enteredBy: req.user!.userId,
     createdAt: new Date().toISOString(),
-  };
+  });
+  await newResult.save();
 
-  results.push(newResult);
-
-  const itemIdx = orderItems.findIndex(oi => oi.id === parseInt(orderItemId));
-  if (itemIdx !== -1) orderItems[itemIdx].status = 'completed';
+  await OrderItem.findOneAndUpdate({ id: parseInt(orderItemId) }, { status: 'completed' });
 
   res.status(201).json({ success: true, data: newResult, message: 'Result entered successfully' });
 };
 
-export const update = (req: AuthRequest, res: Response): void => {
-  const idx = results.findIndex(r => r.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const update = async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await Result.findOne({ id: parseInt(req.params.id) });
+  if (!result) {
     res.status(404).json({ success: false, message: 'Result not found' });
     return;
   }
-  results[idx] = { ...results[idx], ...req.body };
-  res.json({ success: true, data: results[idx], message: 'Result updated successfully' });
+  Object.assign(result, req.body);
+  await result.save();
+  res.json({ success: true, data: result, message: 'Result updated successfully' });
 };
 
-export const verify = (req: AuthRequest, res: Response): void => {
-  const idx = results.findIndex(r => r.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const verify = async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await Result.findOne({ id: parseInt(req.params.id) });
+  if (!result) {
     res.status(404).json({ success: false, message: 'Result not found' });
     return;
   }
-  results[idx].verifiedBy = req.user!.userId;
-  res.json({ success: true, data: results[idx], message: 'Result verified' });
+  result.verifiedBy = req.user!.userId;
+  await result.save();
+  res.json({ success: true, data: result, message: 'Result verified' });
 };

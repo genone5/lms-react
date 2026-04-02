@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Layout, Menu, Button, Avatar, Dropdown, Badge, Typography, Space } from 'antd';
+import { Layout, Menu, Button, Avatar, Dropdown, Badge, Typography, Space, theme } from 'antd';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
   DashboardOutlined, UserOutlined, ExperimentOutlined, OrderedListOutlined,
@@ -9,6 +9,7 @@ import {
   MedicineBoxOutlined, AuditOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
+import { ThemeSwitcher } from '../../shared/components/ThemeSwitcher/ThemeSwitcher';
 import './MainLayout.css';
 
 const { Header, Sider, Content } = Layout;
@@ -34,6 +35,7 @@ const menuItems = [
 export function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuth();
+  const { token } = theme.useToken();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -67,9 +69,10 @@ export function MainLayout() {
       </Sider>
 
       <Layout>
-        <Header className="lms-header">
+        <Header className="lms-header" style={{ background: token.colorBgContainer }}>
           <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} className="lms-collapse-btn" />
           <div className="lms-header-right">
+            <ThemeSwitcher />
             <Badge count={2} size="small">
               <Button type="text" icon={<BellOutlined />} size="large" />
             </Badge>
@@ -87,7 +90,7 @@ export function MainLayout() {
           </div>
         </Header>
 
-        <Content className="lms-content">
+        <Content className="lms-content" style={{ background: token.colorBgLayout }}>
           <Outlet />
         </Content>
       </Layout>

@@ -1,14 +1,31 @@
 import { Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { users, roles, branches, auditLogs } from '../data/mockData.js';
+import { User } from '../models/User.js';
+import { Role } from '../models/Role.js';
+import { Branch } from '../models/Branch.js';
+import { AuditLog } from '../models/AuditLog.js';
+import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
-import type { User } from '../types/index.js';
 
-let nextId = users.length + 1;
-
-export const getAll = (req: AuthRequest, res: Response): void => {
+export const getAll = async (req: AuthRequest, res: Response): Promise<void> => {
   const { search, roleId, status, page = '1', limit = '10' } = req.query as Record<string, string>;
-  let data = users.map(u => ({
+
+  const filter: Record<string, unknown> = {};
+  if (roleId) filter.roleId = parseInt(roleId);
+  if (status) filter.status = status;
+  if (search) {
+    const q = new RegExp(search, 'i');
+    filter.$or = [{ name: q }, { email: q }];
+  }
+
+  const total = await User.countDocuments(filter);
+  const users = await User.find(filter)
+    .skip((parseInt(page) - 1) * parseInt(limit))
+    .limit(parseInt(limit));
+
+  const [roles, branches] = await Promise.all([Role.find({}), Branch.find({})]);
+
+  const data = users.map(u => ({
     id: u.id, name: u.name, email: u.email, roleId: u.roleId,
     roleName: roles.find(r => r.id === u.roleId)?.name,
     branchId: u.branchId,
@@ -16,84 +33,78 @@ export const getAll = (req: AuthRequest, res: Response): void => {
     phone: u.phone, status: u.status, createdAt: u.createdAt,
   }));
 
-  if (search) {
-    const q = search.toLowerCase();
-    data = data.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-  }
-  if (roleId) data = data.filter(u => u.roleId === parseInt(roleId));
-  if (status) data = data.filter(u => u.status === status);
-
-  const total = data.length;
-  const start = (parseInt(page) - 1) * parseInt(limit);
-  res.json({ success: true, data: data.slice(start, start + parseInt(limit)), total });
+  res.json({ success: true, data, total });
 };
 
-export const getById = (req: AuthRequest, res: Response): void => {
-  const user = users.find(u => u.id === parseInt(req.params.id));
+export const getById = async (req: AuthRequest, res: Response): Promise<void> => {
+  const user = await User.findOne({ id: parseInt(req.params.id) });
   if (!user) {
     res.status(404).json({ success: false, message: 'User not found' });
     return;
   }
-  const { passwordHash: _, ...safeUser } = user;
-  res.json({ success: true, data: { ...safeUser, roleName: roles.find(r => r.id === user.roleId)?.name } });
+  const role = await Role.findOne({ id: user.roleId });
+  const { passwordHash: _ph, ...safeUser } = user.toJSON();
+  res.json({ success: true, data: { ...safeUser, roleName: role?.name } });
 };
 
-export const create = (req: AuthRequest, res: Response): void => {
+export const create = async (req: AuthRequest, res: Response): Promise<void> => {
   const { name, email, password, roleId, branchId, phone } = req.body;
   if (!name || !email || !password || !roleId) {
     res.status(400).json({ success: false, message: 'name, email, password and roleId are required' });
     return;
   }
 
-  const existing = users.find(u => u.email === email);
+  const existing = await User.findOne({ email });
   if (existing) {
     res.status(400).json({ success: false, message: 'Email already in use' });
     return;
   }
 
-  const newUser: User = {
-    id: nextId++,
+  const role = await Role.findOne({ id: parseInt(roleId) });
+  const newUser = new User({
+    id: await getNextId('user'),
     name,
     email,
     passwordHash: bcrypt.hashSync(password, 10),
     roleId: parseInt(roleId),
-    roleName: roles.find(r => r.id === parseInt(roleId))?.name,
+    roleName: role?.name,
     branchId: branchId ? parseInt(branchId) : undefined,
     phone,
     status: 'active',
     createdAt: new Date().toISOString(),
-  };
+  });
 
-  users.push(newUser);
-  const { passwordHash: _, ...safeUser } = newUser;
+  await newUser.save();
+  const { passwordHash: _ph, ...safeUser } = newUser.toJSON();
   res.status(201).json({ success: true, data: safeUser, message: 'User created successfully' });
 };
 
-export const update = (req: AuthRequest, res: Response): void => {
-  const idx = users.findIndex(u => u.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const update = async (req: AuthRequest, res: Response): Promise<void> => {
+  const user = await User.findOne({ id: parseInt(req.params.id) });
+  if (!user) {
     res.status(404).json({ success: false, message: 'User not found' });
     return;
   }
   const { password, ...rest } = req.body;
-  users[idx] = { ...users[idx], ...rest };
-  if (password) users[idx].passwordHash = bcrypt.hashSync(password, 10);
-  const { passwordHash: _, ...safeUser } = users[idx];
+  Object.assign(user, rest);
+  if (password) user.passwordHash = bcrypt.hashSync(password, 10);
+  await user.save();
+  const { passwordHash: _ph, ...safeUser } = user.toJSON();
   res.json({ success: true, data: safeUser, message: 'User updated successfully' });
 };
 
-export const deactivate = (req: AuthRequest, res: Response): void => {
-  const idx = users.findIndex(u => u.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const deactivate = async (req: AuthRequest, res: Response): Promise<void> => {
+  const user = await User.findOne({ id: parseInt(req.params.id) });
+  if (!user) {
     res.status(404).json({ success: false, message: 'User not found' });
     return;
   }
-  users[idx].status = users[idx].status === 'active' ? 'inactive' : 'active';
-  res.json({ success: true, message: `User ${users[idx].status === 'active' ? 'activated' : 'deactivated'}` });
+  user.status = user.status === 'active' ? 'inactive' : 'active';
+  await user.save();
+  res.json({ success: true, message: `User ${user.status === 'active' ? 'activated' : 'deactivated'}` });
 };
 
-export const getActivityLogs = (req: AuthRequest, res: Response): void => {
-  const userId = parseInt(req.params.id);
-  const logs = auditLogs.filter(l => l.userId === userId);
+export const getActivityLogs = async (req: AuthRequest, res: Response): Promise<void> => {
+  const logs = await AuditLog.find({ userId: parseInt(req.params.id) });
   res.json({ success: true, data: logs });
 };

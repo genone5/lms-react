@@ -1,10 +1,20 @@
 import { Response } from 'express';
-import { payments, invoices, testOrders, patients, tests, orderItems } from '../data/mockData.js';
+import { Payment } from '../models/Payment.js';
+import { Invoice } from '../models/Invoice.js';
+import { TestOrder } from '../models/TestOrder.js';
+import { Patient } from '../models/Patient.js';
+import { OrderItem } from '../models/OrderItem.js';
+import { Test } from '../models/Test.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
-export const getRevenue = (_req: AuthRequest, res: Response): void => {
+export const getRevenue = async (_req: AuthRequest, res: Response): Promise<void> => {
+  const [payments, unpaidInvoices] = await Promise.all([
+    Payment.find({}),
+    Invoice.find({ status: 'unpaid' }),
+  ]);
+
   const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
-  const pendingRevenue = invoices.filter(i => i.status === 'unpaid').reduce((sum, i) => sum + i.netAmount, 0);
+  const pendingRevenue = unpaidInvoices.reduce((sum, i) => sum + i.netAmount, 0);
 
   const byMethod = payments.reduce((acc, p) => {
     acc[p.paymentMethod] = (acc[p.paymentMethod] || 0) + p.amount;
@@ -28,7 +38,13 @@ export const getRevenue = (_req: AuthRequest, res: Response): void => {
   });
 };
 
-export const getTestVolume = (_req: AuthRequest, res: Response): void => {
+export const getTestVolume = async (_req: AuthRequest, res: Response): Promise<void> => {
+  const [orderItems, tests, totalOrders] = await Promise.all([
+    OrderItem.find({}),
+    Test.find({}),
+    TestOrder.countDocuments({}),
+  ]);
+
   const testCounts = orderItems.reduce((acc, oi) => {
     const test = tests.find(t => t.id === oi.testId);
     if (test) acc[test.name] = (acc[test.name] || 0) + 1;
@@ -49,12 +65,14 @@ export const getTestVolume = (_req: AuthRequest, res: Response): void => {
         .slice(0, 10)
         .map(([name, count]) => ({ name, count })),
       byCategory: Object.entries(byCategory).map(([category, count]) => ({ category, count })),
-      totalOrders: testOrders.length,
+      totalOrders,
     },
   });
 };
 
-export const getPatientStats = (_req: AuthRequest, res: Response): void => {
+export const getPatientStats = async (_req: AuthRequest, res: Response): Promise<void> => {
+  const patients = await Patient.find({});
+
   const byGender = patients.reduce((acc, p) => {
     acc[p.gender] = (acc[p.gender] || 0) + 1;
     return acc;
@@ -76,22 +94,28 @@ export const getPatientStats = (_req: AuthRequest, res: Response): void => {
   });
 };
 
-export const getDailyActivity = (_req: AuthRequest, res: Response): void => {
+export const getDailyActivity = async (_req: AuthRequest, res: Response): Promise<void> => {
   const today = new Date().toISOString().split('T')[0];
-  const todayOrders = testOrders.filter(o => o.orderDate.startsWith(today));
-  const todayRevenue = payments
-    .filter(p => p.paymentDate.startsWith(today))
-    .reduce((sum, p) => sum + p.amount, 0);
+
+  const [newPatients, todayOrders, pendingTests, completedTests, payments] = await Promise.all([
+    Patient.countDocuments({ createdAt: { $regex: `^${today}` } }),
+    TestOrder.countDocuments({ orderDate: { $regex: `^${today}` } }),
+    OrderItem.countDocuments({ status: 'pending' }),
+    OrderItem.countDocuments({ status: 'completed' }),
+    Payment.find({ paymentDate: { $regex: `^${today}` } }),
+  ]);
+
+  const todayRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
 
   res.json({
     success: true,
     data: {
       date: today,
-      newPatients: patients.filter(p => p.createdAt.startsWith(today)).length,
-      totalOrders: todayOrders.length,
-      pendingTests: orderItems.filter(oi => oi.status === 'pending').length,
+      newPatients,
+      totalOrders: todayOrders,
+      pendingTests,
       todayRevenue,
-      completedTests: orderItems.filter(oi => oi.status === 'completed').length,
+      completedTests,
     },
   });
 };

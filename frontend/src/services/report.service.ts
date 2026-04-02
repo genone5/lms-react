@@ -16,7 +16,12 @@ export const generateReport = async (orderId: number) => {
   return res.data.data as Report;
 };
 
-export const downloadReport = async (id: number) => {
-  const res = await apiClient.get(`/reports/${id}/download`);
-  return res.data.data;
+export const downloadReport = async (id: number): Promise<void> => {
+  const res = await apiClient.get(`/reports/${id}/download`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `report_${id}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 };

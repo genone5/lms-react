@@ -1,20 +1,20 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { users, roles } from '../data/mockData.js';
+import { User } from '../models/User.js';
+import { Role } from '../models/Role.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lms-secret-key-2024';
 
-export const login = (req: Request, res: Response): void => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
-
   if (!email || !password) {
     res.status(400).json({ success: false, message: 'Email and password are required' });
     return;
   }
 
-  const user = users.find(u => u.email === email);
+  const user = await User.findOne({ email });
   if (!user || user.status !== 'active') {
     res.status(401).json({ success: false, message: 'Invalid credentials' });
     return;
@@ -26,7 +26,7 @@ export const login = (req: Request, res: Response): void => {
     return;
   }
 
-  const role = roles.find(r => r.id === user.roleId);
+  const role = await Role.findOne({ id: user.roleId });
   const payload = { userId: user.id, email: user.email, roleId: user.roleId, roleName: role?.name || '' };
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });
 
@@ -48,14 +48,14 @@ export const login = (req: Request, res: Response): void => {
   });
 };
 
-export const getProfile = (req: AuthRequest, res: Response): void => {
-  const user = users.find(u => u.id === req.user?.userId);
+export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  const user = await User.findOne({ id: req.user?.userId });
   if (!user) {
     res.status(404).json({ success: false, message: 'User not found' });
     return;
   }
 
-  const role = roles.find(r => r.id === user.roleId);
+  const role = await Role.findOne({ id: user.roleId });
   res.json({
     success: true,
     data: {
@@ -71,9 +71,9 @@ export const getProfile = (req: AuthRequest, res: Response): void => {
   });
 };
 
-export const changePassword = (req: AuthRequest, res: Response): void => {
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
   const { oldPassword, newPassword } = req.body;
-  const user = users.find(u => u.id === req.user?.userId);
+  const user = await User.findOne({ id: req.user?.userId });
 
   if (!user) {
     res.status(404).json({ success: false, message: 'User not found' });
@@ -87,5 +87,6 @@ export const changePassword = (req: AuthRequest, res: Response): void => {
   }
 
   user.passwordHash = bcrypt.hashSync(newPassword, 10);
+  await user.save();
   res.json({ success: true, message: 'Password changed successfully' });
 };

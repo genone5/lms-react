@@ -21,7 +21,7 @@ export function OrderListPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
-  const [patients, setPatients] = useState<Array<{ id: number; firstName: string; lastName: string }>>([]);
+  const [patients, setPatients] = useState<Array<{ id: number; firstName: string; lastName: string; idCardNumber?: string }>>([]);
   const [tests, setTests] = useState<Array<{ id: number; name: string; price: number }>>([]);
   const [branches, setBranches] = useState<Array<{ id: number; name: string }>>([]);
   const [form] = Form.useForm();
@@ -79,7 +79,12 @@ export function OrderListPage() {
         <Form form={form} layout="vertical" onFinish={handleCreate}>
           <Form.Item label="Patient" name="patientId" rules={[{ required: true }]}>
             <Select showSearch optionFilterProp="label"
-              options={patients.map(p => ({ label: `${p.firstName} ${p.lastName}`, value: p.id }))} />
+              options={patients.map(p => ({
+                label: p.idCardNumber
+                  ? `${p.firstName} ${p.lastName} — ${p.idCardNumber}`
+                  : `${p.firstName} ${p.lastName}`,
+                value: p.id,
+              }))} />
           </Form.Item>
           <Form.Item label="Referring Doctor" name="doctorName" rules={[{ required: true }]}>
             <Input placeholder="Dr. Name" />

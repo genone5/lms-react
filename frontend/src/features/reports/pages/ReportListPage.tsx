@@ -29,8 +29,11 @@ export function ReportListPage() {
   };
 
   const handleDownload = async (id: number) => {
-    const data = await downloadReport(id);
-    message.info(`Download link: ${data.url}`);
+    try {
+      await downloadReport(id);
+    } catch {
+      message.error('Failed to download report');
+    }
   };
 
   const columns = [

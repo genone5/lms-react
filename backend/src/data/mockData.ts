@@ -26,11 +26,11 @@ export const users: User[] = [
 ];
 
 export const patients: Patient[] = [
-  { id: 1, firstName: 'Muhammad', lastName: 'Ali', gender: 'male', dateOfBirth: '1990-05-15', phone: '03001111111', email: 'mali@email.com', address: '10 Garden Road', bloodGroup: 'A+', createdAt: '2024-03-01T09:00:00Z' },
-  { id: 2, firstName: 'Fatima', lastName: 'Zahra', gender: 'female', dateOfBirth: '1985-08-22', phone: '03002222222', email: 'fzahra@email.com', address: '22 Park Lane', bloodGroup: 'B+', createdAt: '2024-03-05T10:30:00Z' },
-  { id: 3, firstName: 'Ahmed', lastName: 'Raza', gender: 'male', dateOfBirth: '2000-12-01', phone: '03003333333', address: '5 Green Street', bloodGroup: 'O+', createdAt: '2024-03-10T11:00:00Z' },
-  { id: 4, firstName: 'Zainab', lastName: 'Hussain', gender: 'female', dateOfBirth: '1978-03-30', phone: '03004444444', email: 'zhussain@email.com', address: '88 Hill View', bloodGroup: 'AB-', createdAt: '2024-03-12T08:00:00Z' },
-  { id: 5, firstName: 'Omar', lastName: 'Farooq', gender: 'male', dateOfBirth: '1995-07-11', phone: '03005555555', address: '33 Blue Bay', bloodGroup: 'A-', createdAt: '2024-03-15T14:00:00Z' },
+  { id: 1, firstName: 'Muhammad', lastName: 'Ali', gender: 'male', dateOfBirth: '1990-05-15', age: 34, idCardNumber: '42101-1234567-1', phone: '03001111111', email: 'mali@email.com', address: '10 Garden Road', bloodGroup: 'A+', createdAt: '2024-03-01T09:00:00Z' },
+  { id: 2, firstName: 'Fatima', lastName: 'Zahra', gender: 'female', dateOfBirth: '1985-08-22', age: 39, idCardNumber: '42101-2345678-2', phone: '03002222222', email: 'fzahra@email.com', address: '22 Park Lane', bloodGroup: 'B+', createdAt: '2024-03-05T10:30:00Z' },
+  { id: 3, firstName: 'Ahmed', lastName: 'Raza', gender: 'male', dateOfBirth: '2000-12-01', age: 24, idCardNumber: '35202-3456789-3', phone: '03003333333', address: '5 Green Street', bloodGroup: 'O+', createdAt: '2024-03-10T11:00:00Z' },
+  { id: 4, firstName: 'Zainab', lastName: 'Hussain', gender: 'female', dateOfBirth: '1978-03-30', age: 46, idCardNumber: '35202-4567890-4', phone: '03004444444', email: 'zhussain@email.com', address: '88 Hill View', bloodGroup: 'AB-', createdAt: '2024-03-12T08:00:00Z' },
+  { id: 5, firstName: 'Omar', lastName: 'Farooq', gender: 'male', dateOfBirth: '1995-07-11', age: 29, idCardNumber: '61101-5678901-5', phone: '03005555555', address: '33 Blue Bay', bloodGroup: 'A-', createdAt: '2024-03-15T14:00:00Z' },
 ];
 
 export const tests: Test[] = [

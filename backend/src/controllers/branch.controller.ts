@@ -1,16 +1,17 @@
 import { Response } from 'express';
-import { branches, users, roles } from '../data/mockData.js';
+import { Branch } from '../models/Branch.js';
+import { User } from '../models/User.js';
+import { Role } from '../models/Role.js';
+import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
-import type { Branch } from '../types/index.js';
 
-let nextId = branches.length + 1;
-
-export const getAll = (_req: AuthRequest, res: Response): void => {
+export const getAll = async (_req: AuthRequest, res: Response): Promise<void> => {
+  const branches = await Branch.find({});
   res.json({ success: true, data: branches });
 };
 
-export const getById = (req: AuthRequest, res: Response): void => {
-  const branch = branches.find(b => b.id === parseInt(req.params.id));
+export const getById = async (req: AuthRequest, res: Response): Promise<void> => {
+  const branch = await Branch.findOne({ id: parseInt(req.params.id) });
   if (!branch) {
     res.status(404).json({ success: false, message: 'Branch not found' });
     return;
@@ -18,41 +19,45 @@ export const getById = (req: AuthRequest, res: Response): void => {
   res.json({ success: true, data: branch });
 };
 
-export const create = (req: AuthRequest, res: Response): void => {
+export const create = async (req: AuthRequest, res: Response): Promise<void> => {
   const { name, address, city, phone } = req.body;
   if (!name || !address || !city) {
     res.status(400).json({ success: false, message: 'name, address and city are required' });
     return;
   }
-  const newBranch: Branch = { id: nextId++, name, address, city, phone, createdAt: new Date().toISOString() };
-  branches.push(newBranch);
+  const newBranch = new Branch({ id: await getNextId('branch'), name, address, city, phone, createdAt: new Date().toISOString() });
+  await newBranch.save();
   res.status(201).json({ success: true, data: newBranch, message: 'Branch created successfully' });
 };
 
-export const update = (req: AuthRequest, res: Response): void => {
-  const idx = branches.findIndex(b => b.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const update = async (req: AuthRequest, res: Response): Promise<void> => {
+  const branch = await Branch.findOne({ id: parseInt(req.params.id) });
+  if (!branch) {
     res.status(404).json({ success: false, message: 'Branch not found' });
     return;
   }
-  branches[idx] = { ...branches[idx], ...req.body };
-  res.json({ success: true, data: branches[idx], message: 'Branch updated' });
+  Object.assign(branch, req.body);
+  await branch.save();
+  res.json({ success: true, data: branch, message: 'Branch updated' });
 };
 
-export const remove = (req: AuthRequest, res: Response): void => {
-  const idx = branches.findIndex(b => b.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const remove = async (req: AuthRequest, res: Response): Promise<void> => {
+  const branch = await Branch.findOneAndDelete({ id: parseInt(req.params.id) });
+  if (!branch) {
     res.status(404).json({ success: false, message: 'Branch not found' });
     return;
   }
-  branches.splice(idx, 1);
   res.json({ success: true, message: 'Branch deleted' });
 };
 
-export const getStaff = (req: AuthRequest, res: Response): void => {
+export const getStaff = async (req: AuthRequest, res: Response): Promise<void> => {
   const branchId = parseInt(req.params.id);
-  const staff = users
-    .filter(u => u.branchId === branchId)
-    .map(u => ({ id: u.id, name: u.name, email: u.email, roleName: roles.find(r => r.id === u.roleId)?.name, status: u.status }));
+  const users = await User.find({ branchId });
+  const roles = await Role.find({});
+  const staff = users.map(u => ({
+    id: u.id, name: u.name, email: u.email,
+    roleName: roles.find(r => r.id === u.roleId)?.name,
+    status: u.status,
+  }));
   res.json({ success: true, data: staff });
 };

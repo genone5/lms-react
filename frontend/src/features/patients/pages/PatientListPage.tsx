@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Typography, Input, Modal, Form, Select, DatePicker, message, Popconfirm, Tag } from 'antd';
+import { Table, Button, Space, Typography, Input, Modal, Form, Select, DatePicker, InputNumber, message, Popconfirm, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPatients, addPatient, editPatient, removePatient, setSelectedPatient } from '../../../store/slices/patientSlice';
@@ -52,6 +52,8 @@ export function PatientListPage() {
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: 'Name', key: 'name', render: (_: unknown, p: Patient) => `${p.firstName} ${p.lastName}` },
+    { title: 'ID Card (CNIC)', dataIndex: 'idCardNumber', key: 'idCardNumber', render: (v: string) => v || '—' },
+    { title: 'Age', dataIndex: 'age', key: 'age', width: 70, render: (v: number) => v ?? '—' },
     { title: 'Gender', dataIndex: 'gender', key: 'gender', render: (g: string) => <Tag>{g?.toUpperCase()}</Tag> },
     { title: 'Phone', dataIndex: 'phone', key: 'phone' },
     { title: 'Blood Group', dataIndex: 'bloodGroup', key: 'bloodGroup' },
@@ -77,37 +79,46 @@ export function PatientListPage() {
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>New Patient</Button>
       </div>
       <div style={{ marginBottom: 16 }}>
-        <Search placeholder="Search by name or phone..." onSearch={setSearch} onChange={e => !e.target.value && setSearch('')} allowClear style={{ maxWidth: 300 }} />
+        <Search placeholder="Search by name, phone or CNIC..." onSearch={setSearch} onChange={e => !e.target.value && setSearch('')} allowClear style={{ maxWidth: 320 }} />
       </div>
       <Table dataSource={patients} columns={columns} rowKey="id" loading={loading} bordered size="middle"
         pagination={{ current: page, pageSize: 10, total, onChange: setPage, showSizeChanger: false, showTotal: t => `Total ${t} patients` }} />
 
       <Modal open={modalOpen} title={editingPatient ? 'Edit Patient' : 'New Patient'} onCancel={() => setModalOpen(false)} onOk={() => form.submit()} okText="Save" width={640} destroyOnClose>
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <Space style={{ width: '100%' }} direction="horizontal">
+          <div style={{ display: 'flex', gap: 12 }}>
             <Form.Item label="First Name" name="firstName" rules={[{ required: true }]} style={{ flex: 1, marginBottom: 12 }}>
               <Input />
             </Form.Item>
             <Form.Item label="Last Name" name="lastName" rules={[{ required: true }]} style={{ flex: 1, marginBottom: 12 }}>
               <Input />
             </Form.Item>
-          </Space>
-          <Space style={{ width: '100%' }}>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Form.Item label="ID Card (CNIC)" name="idCardNumber" style={{ flex: 1, marginBottom: 12 }}
+              rules={[{ pattern: /^\d{5}-\d{7}-\d$/, message: 'Format: 42101-1234567-1' }]}>
+              <Input placeholder="42101-1234567-1" maxLength={15} />
+            </Form.Item>
+            <Form.Item label="Age" name="age" style={{ flex: 1, marginBottom: 12 }}>
+              <InputNumber min={0} max={150} style={{ width: '100%' }} />
+            </Form.Item>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
             <Form.Item label="Gender" name="gender" rules={[{ required: true }]} style={{ flex: 1, marginBottom: 12 }}>
               <Select options={GENDER_OPTIONS} />
             </Form.Item>
             <Form.Item label="Date of Birth" name="dateOfBirth" style={{ flex: 1, marginBottom: 12 }}>
               <DatePicker style={{ width: '100%' }} />
             </Form.Item>
-          </Space>
-          <Space style={{ width: '100%' }}>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
             <Form.Item label="Phone" name="phone" rules={[{ required: true }]} style={{ flex: 1, marginBottom: 12 }}>
               <Input />
             </Form.Item>
             <Form.Item label="Blood Group" name="bloodGroup" style={{ flex: 1, marginBottom: 12 }}>
               <Select options={BLOOD_GROUPS.map(b => ({ label: b, value: b }))} allowClear />
             </Form.Item>
-          </Space>
+          </div>
           <Form.Item label="Email" name="email" rules={[{ type: 'email' }]} style={{ marginBottom: 12 }}>
             <Input />
           </Form.Item>

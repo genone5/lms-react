@@ -1,16 +1,15 @@
 import { Response } from 'express';
-import { roles } from '../data/mockData.js';
+import { Role } from '../models/Role.js';
+import { getNextId } from '../db/counter.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
-import type { Role } from '../types/index.js';
 
-let nextId = roles.length + 1;
-
-export const getAll = (_req: AuthRequest, res: Response): void => {
+export const getAll = async (_req: AuthRequest, res: Response): Promise<void> => {
+  const roles = await Role.find({});
   res.json({ success: true, data: roles });
 };
 
-export const getById = (req: AuthRequest, res: Response): void => {
-  const role = roles.find(r => r.id === parseInt(req.params.id));
+export const getById = async (req: AuthRequest, res: Response): Promise<void> => {
+  const role = await Role.findOne({ id: parseInt(req.params.id) });
   if (!role) {
     res.status(404).json({ success: false, message: 'Role not found' });
     return;
@@ -18,34 +17,34 @@ export const getById = (req: AuthRequest, res: Response): void => {
   res.json({ success: true, data: role });
 };
 
-export const create = (req: AuthRequest, res: Response): void => {
+export const create = async (req: AuthRequest, res: Response): Promise<void> => {
   const { name, description } = req.body;
   if (!name) {
     res.status(400).json({ success: false, message: 'Name is required' });
     return;
   }
-  const newRole: Role = { id: nextId++, name, description };
-  roles.push(newRole);
+  const newRole = new Role({ id: await getNextId('role'), name, description });
+  await newRole.save();
   res.status(201).json({ success: true, data: newRole, message: 'Role created successfully' });
 };
 
-export const update = (req: AuthRequest, res: Response): void => {
-  const idx = roles.findIndex(r => r.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const update = async (req: AuthRequest, res: Response): Promise<void> => {
+  const role = await Role.findOne({ id: parseInt(req.params.id) });
+  if (!role) {
     res.status(404).json({ success: false, message: 'Role not found' });
     return;
   }
-  roles[idx] = { ...roles[idx], ...req.body };
-  res.json({ success: true, data: roles[idx], message: 'Role updated' });
+  Object.assign(role, req.body);
+  await role.save();
+  res.json({ success: true, data: role, message: 'Role updated' });
 };
 
-export const remove = (req: AuthRequest, res: Response): void => {
-  const idx = roles.findIndex(r => r.id === parseInt(req.params.id));
-  if (idx === -1) {
+export const remove = async (req: AuthRequest, res: Response): Promise<void> => {
+  const role = await Role.findOneAndDelete({ id: parseInt(req.params.id) });
+  if (!role) {
     res.status(404).json({ success: false, message: 'Role not found' });
     return;
   }
-  roles.splice(idx, 1);
   res.json({ success: true, message: 'Role deleted' });
 };
 

@@ -3,6 +3,7 @@ import authReducer from '../store/slices/authSlice';
 import patientReducer from '../store/slices/patientSlice';
 import testReducer from '../store/slices/testSlice';
 import orderReducer from '../store/slices/orderSlice';
+import themeReducer from '../store/slices/themeSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     patients: patientReducer,
     tests: testReducer,
     orders: orderReducer,
+    theme: themeReducer,
   },
 });
 
